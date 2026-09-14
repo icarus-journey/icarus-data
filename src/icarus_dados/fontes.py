@@ -91,7 +91,7 @@ FONTES: tuple[DefinicaoFonte, ...] = (
             "vigitel-2006-2024-peso-rake-csv.zip"
         ),
         arquivo_zip="vigitel-2006-2024-peso-rake-csv.zip",
-        membro_csv="vigitel-2006-2024-peso-rake.csv",
+        membro_csv="vigitel-2006-2024-peso-rake_slabel.csv",
         tabela_bronze="vigitel_harmonizado",
         codificacao="iso-8859-1",
         colunas_esperadas=486,
