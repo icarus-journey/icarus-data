@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "icarus-dados"
+version = "0.1.0"
+description = "ETL dos dados públicos do Icarus"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "boto3==1.43.78",
+  "duckdb==1.5.5",
+]
+
+[project.optional-dependencies]
+desenvolvimento = [
+  "pytest==8.4.2",
+]
+
+[project.scripts]
+icarus-dados = "icarus_dados.cli:principal"
+
+[tool.pytest.ini_options]
+addopts = "-q"
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/icarus_dados"]
