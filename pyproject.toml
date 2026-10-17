@@ -17,6 +17,13 @@ dependencies = [
 desenvolvimento = [
   "pytest==8.4.2",
 ]
+analise = [
+  "ipykernel==6.31.0",
+  "matplotlib==3.10.7",
+  "numpy==2.2.6",
+  "pandas==2.3.3",
+  "seaborn==0.13.2",
+]
 
 [project.scripts]
 icarus-dados = "icarus_dados.cli:principal"
