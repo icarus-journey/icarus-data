@@ -11,6 +11,8 @@ requires-python = ">=3.10"
 dependencies = [
   "boto3==1.43.78",
   "duckdb==1.5.5",
+  "numpy==2.2.6",
+  "pandas==2.3.3",
 ]
 
 [project.optional-dependencies]
