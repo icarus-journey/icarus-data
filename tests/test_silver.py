@@ -38,6 +38,7 @@ def banco(tmp_path):
             "TUDIARYDAY": str([7, 2][indice]),
             "TESCHENR": ["1", "-1"][indice],
             "TELFS": ["1", "5"][indice],
+            "TRDPFTPT": ["1", "-1"][indice],
         }
         registro.update(
             {
@@ -82,6 +83,8 @@ def banco(tmp_path):
             insonia="1",
             r701_hh="7",
             r701_mm="30",
+            r702_hh="8",
+            r702_mm="30",
         ),
         dict(
             ano="2024",
@@ -101,6 +104,8 @@ def banco(tmp_path):
             insonia="0",
             r701_hh="7",
             r701_mm="",
+            r702_hh="8",
+            r702_mm="0",
         ),
         dict(
             ano="2024",
@@ -120,6 +125,8 @@ def banco(tmp_path):
             insonia="1",
             r701_hh="0",
             r701_mm="0",
+            r702_hh="0",
+            r702_mm="0",
         ),
     ]
     # Campo sem comportamento em outra edição não elimina entrevista de 2024.
@@ -216,7 +223,9 @@ def test_reprocessamento_nao_duplica_linhas(banco):
     primeira, segunda = executar_silver(banco), executar_silver(banco)
     assert primeira["versao_silver"] == segunda["versao_silver"]
     assert segunda["estado"] == "duplicada"
-    assert consultar(banco, "SELECT count(*) FROM silver.atus_tempos") == [(8,)]
+    assert consultar(banco, "SELECT count(*) FROM silver.atus_tempos") == [
+        (2 * len(CODIGOS_ATUS),)
+    ]
     assert consultar(
         banco, "SELECT estado FROM controle.execucoes_silver ORDER BY iniciado_em"
     ) == [("concluida",), ("duplicada",)]
@@ -366,7 +375,9 @@ def test_falha_de_gravacao_reverte_todas_tabelas_e_ponteiro(banco, monkeypatch):
     assert consultar(banco, "SELECT versao_silver FROM controle.silver_vigente") == [
         (primeira["versao_silver"],)
     ]
-    assert consultar(banco, "SELECT count(*) FROM silver.atus_tempos") == [(8,)]
+    assert consultar(banco, "SELECT count(*) FROM silver.atus_tempos") == [
+        (2 * len(CODIGOS_ATUS),)
+    ]
     assert consultar(banco, "SELECT count(*) FROM silver.atus_pessoas") == [(2,)]
     assert consultar(banco, "SELECT count(*) FROM silver.vigitel_2024") == [(3,)]
     assert consultar(banco, "SELECT count(*) FROM controle.fontes_silver") == [(4,)]
@@ -433,3 +444,28 @@ def test_periodos_compartilham_motivo_de_suporte_e_recorte(banco, tmp_path):
         assert len(grupo) == 4
         assert grupo.suporte_elegivel.nunique() == 1
         assert grupo.motivos_suporte.nunique() == 1
+
+
+def test_sono_desejado_preserva_ausencia_e_diferenca_de_preferencia(banco):
+    executar_silver(banco)
+    assert consultar(
+        banco,
+        "SELECT idade, sono_desejado_minutos, diferenca_sono_minutos, deseja_mais_sono FROM silver.vigitel_2024 ORDER BY idade",
+    ) == [
+        (24, 510, 60, True),
+        (28, 0, 0, False),
+        (55, 480, None, None),
+    ]
+
+
+def test_migracao_aditiva_preserva_valores_historicos(banco):
+    with duckdb.connect(str(banco)) as conexao:
+        conexao.execute("CREATE SCHEMA silver")
+        conexao.execute(
+            "CREATE TABLE silver.vigitel_2024 AS SELECT _id_ingestao, 'antiga' AS _versao_silver FROM bronze.vigitel_harmonizado WHERE ano='2024'"
+        )
+    executar_silver(banco)
+    assert consultar(
+        banco,
+        "SELECT count(*) FROM silver.vigitel_2024 WHERE _versao_silver='antiga' AND sono_desejado_minutos IS NULL",
+    ) == [(3,)]

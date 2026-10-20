@@ -11,6 +11,7 @@ from .configuracao import Configuracao
 from .fontes import FONTES, selecionar_fontes
 from .pipeline import PipelineBronze
 from .silver import executar_silver
+from .gold import executar_gold, exportar_gold
 
 
 def criar_parser() -> argparse.ArgumentParser:
@@ -32,6 +33,15 @@ def criar_parser() -> argparse.ArgumentParser:
     for comando, ajuda in [
         ("transformar-silver", "Transforma a Bronze pelo catálogo validado"),
         ("analisar-silver", "Gera análise descritiva interna da Silver vigente"),
+        (
+            "agregar-gold",
+            "Calcula referências, relações e fatos públicos da Silver vigente",
+        ),
+        ("exportar-gold", "Exporta somente o snapshot público Gold validado"),
+        (
+            "publicar-gold",
+            "Publica atomicamente no PostgreSQL configurado pelo ambiente",
+        ),
     ]:
         analitico = subparsers.add_parser(comando, help=ajuda)
         analitico.add_argument(
@@ -41,9 +51,15 @@ def criar_parser() -> argparse.ArgumentParser:
                 os.getenv("ICARUS_DADOS_DUCKDB_CAMINHO", "./dados/icarus.duckdb")
             ),
         )
-        if comando == "analisar-silver":
+        if comando in {"analisar-silver", "exportar-gold"}:
             analitico.add_argument(
-                "--saida", type=Path, default=Path("./dados/analise-silver")
+                "--saida",
+                type=Path,
+                default=Path(
+                    "./dados/analise-silver"
+                    if comando == "analisar-silver"
+                    else "./dados/gold"
+                ),
             )
     return parser
 
@@ -51,6 +67,17 @@ def criar_parser() -> argparse.ArgumentParser:
 def principal() -> int:
     argumentos = criar_parser().parse_args()
     try:
+        if argumentos.comando in {"agregar-gold", "exportar-gold", "publicar-gold"}:
+            if argumentos.comando == "agregar-gold":
+                resultado = executar_gold(argumentos.banco)
+            elif argumentos.comando == "exportar-gold":
+                resultado = exportar_gold(argumentos.banco, argumentos.saida)
+            else:
+                from .publicacao import publicar_gold
+
+                resultado = publicar_gold(argumentos.banco)
+            print(json.dumps(resultado, ensure_ascii=False, indent=2))
+            return 0
         if argumentos.comando == "transformar-silver":
             print(
                 json.dumps(

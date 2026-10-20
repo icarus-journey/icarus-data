@@ -14,11 +14,12 @@ Os ZIPs originais e seus manifestos são preservados no MinIO. O DuckDB mantém
 uma tabela independente para cada fonte, todas as colunas recebidas como texto,
 metadados técnicos por linha e tabelas de controle das execuções.
 
-A Silver aplica o catálogo público v1.0.0: atividade física, sintomas de
-insônia e sono habitual no Vigitel 2024; sono, aulas/tarefas, trabalho e lazer
-selecionado no ATUS 2024. Pandas normaliza tipos, domínios e junções; NumPy
-calcula interseções de horários e estatísticas ponderadas da análise inicial.
-Gold e publicação no PostgreSQL pertencem à próxima entrega.
+A Silver aplica o catálogo 2.0.0: acrescenta sono desejado e pares válidos no
+Vigitel, separa aulas/tarefas e inclui demandas domésticas e deslocamentos por
+finalidade no ATUS. A Gold calcula referências, duas associações descritivas
+de atividade física/sono e fatos rastreáveis; preserva duas sínteses educativas
+de pesquisas primárias. A publicação atômica usa o esquema PostgreSQL
+`dados_publicos`, separado dos registros pessoais.
 
 ## Requisitos
 
@@ -142,6 +143,52 @@ FROM controle.execucoes_silver ORDER BY iniciado_em DESC;
 O contrato técnico está no
 [contexto compartilhado](../icarus-context/docs/implementation-design/data/06-contrato-camada-silver.md).
 
+### Gold e publicação
+
+```bash
+.venv/bin/icarus-dados agregar-gold --banco ./dados/icarus.duckdb
+.venv/bin/icarus-dados exportar-gold --banco ./dados/icarus.duckdb --saida ./dados/gold
+# Configure ICARUS_DADOS_POSTGRES_DSN no ambiente; não passe senha na linha de comando.
+.venv/bin/icarus-dados publicar-gold --banco ./dados/icarus.duckdb
+```
+
+A Silver migra colunas de forma aditiva e transacional, mantendo o histórico
+anterior. Gold usa apenas a Silver vigente 2.0.0. A assinatura inclui insumos,
+versões, significado dos indicadores e curadoria de pesquisa. Repetir não
+duplica; falha preserva os ponteiros anteriores.
+
+`gold.referencias`, `gold.fatos_insight` e `gold.evidencias_pesquisa` guardam os
+conteúdos por versão. `controle.qualidade_gold` mantém os motivos internos de
+supressão. O JSON exportado e o PostgreSQL não expõem microdados, pesos ou
+contagens internas. Pares de associação e os quatro períodos são conjuntos
+atômicos: não publicar uma parte quando a outra falha no suporte. As saídas
+não incluem denominadores numéricos aditivos para reconstruir células pequenas.
+
+No PostgreSQL, consulte `dados_publicos.referencias_vigentes`,
+`dados_publicos.fatos_insight_vigentes` e
+`dados_publicos.evidencias_pesquisa_vigentes`. Um bloqueio transacional impede
+publicadores concorrentes; o ponteiro muda após conferir todos os conjuntos.
+O checksum e a validação do conteúdo também são aplicados nas repetições.
+
+`selecionar_referencia` seleciona por indicador, medida, idade e filtros
+opcionais compatíveis, com alternativas etárias/perfis explícitas. O retorno
+informa o recorte efetivo. A API ainda precisa integrar esse contrato; não há
+endpoint ou mudança de mensagem RF-10 implícitos nesta entrega. Pesquisas
+educativas não são estimativas ATUS/Vigitel ou previsão de sucesso pessoal.
+
+Para conferir manualmente uma associação:
+
+```sql
+SELECT conteudo->>'indicador', conteudo->'valores'
+FROM dados_publicos.referencias_vigentes
+WHERE conteudo->>'medida' = 'associacao'
+  AND conteudo->>'faixa_etaria' = '18–28';
+```
+
+O [contrato Gold](../icarus-context/docs/implementation-design/data/07-contrato-camada-gold.md)
+define medidas, seleção, responsabilidades e limitações. Os CSVs de
+`analisar-silver` continuam internos; não os publique como snapshot.
+
 ## Garantias da ingestão
 
 - cálculo de SHA-256 antes do processamento;
@@ -161,3 +208,6 @@ O contrato técnico está no
 ```
 
 Os testes não acessam a internet nem um MinIO real.
+O teste PostgreSQL usa `ICARUS_DADOS_TESTE_POSTGRES_DSN` e exige um banco
+descartável com nome iniciado em `icarus_teste_`; ele recria apenas o esquema
+analítico desse banco. Sem essa variável, a integração é explicitamente pulada.

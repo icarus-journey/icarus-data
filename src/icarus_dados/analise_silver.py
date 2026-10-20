@@ -9,7 +9,7 @@ import pandas as pd
 
 from .transformacoes_silver import PERIODOS
 
-VERSAO_ANALISE = "1.1.0"
+VERSAO_ANALISE = "2.0.0"
 
 
 def quantil_ponderado(valores, pesos, probabilidade):
@@ -91,6 +91,8 @@ def analisar_vigitel(dados):
             ("vigitel_atividade_fisica_lazer", "ativo_lazer", True),
             ("vigitel_sintomas_insonia", "sintomas_insonia", True),
             ("vigitel_duracao_sono_habitual", "sono_minutos", False),
+            ("vigitel_duracao_sono_desejada", "sono_desejado_minutos", False),
+            ("vigitel_deseja_mais_sono", "deseja_mais_sono", True),
         ]:
             linhas.append(
                 {

@@ -1,17 +1,31 @@
-"""Transformações do catálogo público v1.0.0; não altera a Bronze."""
+"""Transformações versionadas para referências e relações de rotina."""
 
 import numpy as np
 import pandas as pd
 
 
-VERSAO_CATALOGO = "1.0.0"
-VERSAO_TRANSFORMACOES = "1.0.0"
+VERSAO_CATALOGO = "2.0.0"
+VERSAO_TRANSFORMACOES = "2.0.0"
 CODIGOS_ATUS = {
     "atus_sono_diario": ("010101",),
     "atus_aulas_tarefas_estudo": ("060101", "060102", "060301", "060302"),
     "atus_trabalho_empregos": ("050101", "050102"),
     "atus_lazer_selecionado": ("120301",)
     + tuple(f"1203{numero:02d}" for numero in range(3, 14)),
+    "atus_aulas": ("060101", "060102"),
+    "atus_tarefas_estudo": ("060301", "060302"),
+    "atus_casa_alimentacao": (
+        "020101",
+        "020102",
+        "020103",
+        "020104",
+        "020199",
+        "020201",
+        "020202",
+        "020203",
+    ),
+    "atus_deslocamento_trabalho": ("180501",),
+    "atus_deslocamento_aulas": ("180601",),
 }
 AREAS = dict(
     zip(
@@ -21,6 +35,11 @@ AREAS = dict(
             "ESTUDOS_E_APRENDIZADO",
             "TRABALHO_E_CARREIRA",
             "LAZER_E_CRIATIVIDADE",
+            "ESTUDOS_E_APRENDIZADO",
+            "ESTUDOS_E_APRENDIZADO",
+            "CASA_E_VIDA_PRATICA",
+            "TRABALHO_E_CARREIRA",
+            "ESTUDOS_E_APRENDIZADO",
         ),
     )
 )
@@ -49,6 +68,8 @@ CAMPOS_VIGITEL = [
     "insonia",
     "r701_hh",
     "r701_mm",
+    "r702_hh",
+    "r702_mm",
 ]
 
 
@@ -238,6 +259,35 @@ def transformar_vigitel(dados, qualidade):
         resultado[campo] = valores
         qualidade.registrar(fonte, campo, "ausente_na_medida", valores.isna().sum())
     resultado["atividade_minutos_equivalentes"] = minutos
+    horas_desejadas, minutos_desejados = numeros["r702_hh"], numeros["r702_mm"]
+    desejado_valido = (
+        horas_desejadas.between(0, 23)
+        & minutos_desejados.between(0, 59)
+        & horas_desejadas.mod(1).eq(0)
+        & minutos_desejados.mod(1).eq(0)
+    ).fillna(False)
+    desejado = (
+        (60 * horas_desejadas + minutos_desejados)
+        .where(desejado_valido)
+        .astype("Int64")
+    )
+    resultado["sono_desejado_minutos"] = desejado
+    resultado["diferenca_sono_minutos"] = desejado - sono
+    resultado["deseja_mais_sono"] = resultado.diferenca_sono_minutos.gt(0).astype(
+        "boolean"
+    )
+    qualidade.registrar(
+        fonte,
+        "sono_desejado",
+        "resposta_invalida_ou_incompleta",
+        (~desejado_valido).sum(),
+    )
+    qualidade.registrar(
+        fonte,
+        "deseja_mais_sono",
+        "ausente_na_medida",
+        resultado.deseja_mais_sono.isna().sum(),
+    )
     resultado["ano"] = 2024
     return resultado
 
@@ -282,6 +332,11 @@ def transformar_atus(resumo, atividades, respondentes, qualidade):
     trabalho = qualidade.numerico(resumo, "TELFS", fonte, sentinelas=(-1, -2, -3))
     qualidade.dominio(trabalho, range(1, 6), fonte, "TELFS", permite_nulo=True)
     pessoas["trabalha"] = trabalho.isin([1, 2]).astype("boolean").mask(trabalho.isna())
+    jornada = qualidade.numerico(resumo, "TRDPFTPT", fonte, sentinelas=(-1, -2, -3))
+    qualidade.dominio(jornada, [1, 2], fonte, "TRDPFTPT", permite_nulo=True)
+    pessoas["jornada_integral"] = (
+        jornada.eq(1).astype("boolean").mask(~pessoas.trabalha.fillna(False))
+    )
     for campo in ["estuda", "trabalha"]:
         qualidade.registrar(
             fonte, campo, "ausente_no_perfil", pessoas[campo].isna().sum()

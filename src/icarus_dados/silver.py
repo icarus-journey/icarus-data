@@ -233,6 +233,7 @@ def executar_silver(caminho: Path):
                             "TUDIARYDAY",
                             "TESCHENR",
                             "TELFS",
+                            "TRDPFTPT",
                         ],
                         "atus_respondent": ["TUCASEID", "TUDIARYDATE"],
                         "vigitel_harmonizado": CAMPOS_VIGITEL,
@@ -267,6 +268,20 @@ def executar_silver(caminho: Path):
                         conexao.execute(
                             f'CREATE TABLE IF NOT EXISTS silver."{tabela}" AS SELECT * FROM resultado_silver LIMIT 0'
                         )
+                        # Migração aditiva transacional: versões antigas mantêm nulos nos novos campos.
+                        colunas = {
+                            r[0]
+                            for r in conexao.execute(
+                                f'DESCRIBE silver."{tabela}"'
+                            ).fetchall()
+                        }
+                        for campo, tipo, *_ in conexao.execute(
+                            "DESCRIBE resultado_silver"
+                        ).fetchall():
+                            if campo not in colunas:
+                                conexao.execute(
+                                    f'ALTER TABLE silver."{tabela}" ADD COLUMN "{campo}" {tipo}'
+                                )
                         conexao.execute(
                             f'INSERT INTO silver."{tabela}" BY NAME SELECT * FROM resultado_silver'
                         )
