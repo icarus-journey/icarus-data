@@ -9,6 +9,8 @@ import pandas as pd
 
 from .transformacoes_silver import PERIODOS
 
+VERSAO_ANALISE = "1.1.0"
+
 
 def quantil_ponderado(valores, pesos, probabilidade):
     valores, pesos = np.asarray(valores, dtype=float), np.asarray(pesos, dtype=float)
@@ -50,15 +52,21 @@ def _medidas(valores, pesos, *, binario):
     valores, pesos = valores[validos].astype(float), pesos[validos].astype(float)
     n, kish = _suporte(pesos)
     resultado = {"n": n, "n_efetivo_kish": kish, "n_ausentes": int((~validos).sum())}
+    motivos = []
+    if n < 100:
+        motivos.append("denominador_menor_100")
+    if kish < 50:
+        motivos.append("kish_menor_50")
     if binario:
         positivos = int(valores.eq(1).sum())
+        if positivos < 10:
+            motivos.append("positivos_menor_10")
+        if n - positivos < 10:
+            motivos.append("negativos_menor_10")
         resultado.update(
             n_positivos=positivos,
             percentual=float(100 * np.average(valores, weights=pesos)) if n else None,
-            suporte_elegivel=n >= 100
-            and kish >= 50
-            and positivos >= 10
-            and n - positivos >= 10,
+            suporte_elegivel=not motivos,
         )
     else:
         resultado.update(
@@ -71,7 +79,8 @@ def _medidas(valores, pesos, *, binario):
                 ]
             }
         )
-        resultado["suporte_elegivel"] = n >= 100 and kish >= 50
+        resultado["suporte_elegivel"] = not motivos
+    resultado["motivos_suporte"] = "|".join(motivos)
     return resultado
 
 
@@ -129,14 +138,21 @@ def analisar_atus(pessoas, tempos):
                     }
                 )
                 n, kish = _suporte(participantes.peso)
-                parcelas, elegivel = [], n >= 100 and kish >= 50
+                parcelas, motivos = [], []
+                if n < 100:
+                    motivos.append("participantes_menor_100")
+                if kish < 50:
+                    motivos.append("kish_participantes_menor_50")
                 total = float(np.dot(quadro.peso, quadro.minutos))
+                if not total:
+                    motivos.append("sem_minutos")
                 for periodo in PERIODOS:
                     contribuintes = quadro[quadro[periodo].gt(0)]
                     n_periodo, kish_periodo = _suporte(contribuintes.peso)
-                    elegivel &= n_periodo == 0 or (
-                        n_periodo >= 10 and kish_periodo >= 10
-                    )
+                    if n_periodo and n_periodo < 10:
+                        motivos.append(f"{periodo}_contribuintes_menor_10")
+                    if n_periodo and kish_periodo < 10:
+                        motivos.append(f"{periodo}_kish_menor_10")
                     parcelas.append(
                         {
                             **base,
@@ -155,9 +171,55 @@ def analisar_atus(pessoas, tempos):
                     )
                 for parcela in parcelas:
                     linhas.append(
-                        {**parcela, "suporte_elegivel": bool(elegivel and total > 0)}
+                        {
+                            **parcela,
+                            "suporte_elegivel": not motivos,
+                            "motivos_suporte": "|".join(motivos),
+                        }
                     )
     return pd.DataFrame(linhas)
+
+
+def analisar_perfis_atus(pessoas, tempos):
+    """Recortes permitidos; ausência no perfil nunca equivale a resposta negativa."""
+    resultados = []
+    filtros = (
+        [(estuda, None) for estuda in [True, False]]
+        + [(None, trabalha) for trabalha in [True, False]]
+        + [(estuda, trabalha) for estuda in [True, False] for trabalha in [True, False]]
+    )
+    for estuda, trabalha in filtros:
+        selecionadas = pessoas
+        for campo, filtro in [("estuda", estuda), ("trabalha", trabalha)]:
+            if filtro is not None:
+                selecionadas = selecionadas[
+                    selecionadas[campo].eq(filtro).fillna(False)
+                ]
+        if selecionadas.empty:
+            continue
+        analise = analisar_atus(
+            selecionadas, tempos[tempos.codigo_pessoa.isin(selecionadas.codigo_pessoa)]
+        )
+        if estuda is not None:
+            # O pai 18+ contém idades fora do universo de TESCHENR.
+            analise = analise[~analise.faixa_etaria.isin(["18+", "50–64", "65+"])]
+        analise = analise.copy()
+        analise["filtro_estuda"] = pd.Series(
+            estuda, index=analise.index, dtype="boolean"
+        )
+        analise["filtro_trabalha"] = pd.Series(
+            trabalha, index=analise.index, dtype="boolean"
+        )
+        resultados.append(analise)
+    if resultados:
+        return pd.concat(resultados, ignore_index=True)
+    return pd.DataFrame(
+        columns=[
+            *analisar_atus(pessoas, tempos).columns,
+            "filtro_estuda",
+            "filtro_trabalha",
+        ]
+    )
 
 
 def executar_analise(caminho: Path, saida: Path):
@@ -187,6 +249,7 @@ def executar_analise(caminho: Path, saida: Path):
         ).fetchone()
     vigitel = analisar_vigitel(quadros["vigitel_2024"])
     atus = analisar_atus(quadros["atus_pessoas"], quadros["atus_tempos"])
+    perfis = analisar_perfis_atus(quadros["atus_pessoas"], quadros["atus_tempos"])
     # Saída por versão; completar primeiro os arquivos de uma execução temporária.
     import tempfile
 
@@ -196,12 +259,15 @@ def executar_analise(caminho: Path, saida: Path):
         pasta = Path(temporario)
         vigitel.to_csv(pasta / "vigitel.csv", index=False)
         atus.to_csv(pasta / "atus.csv", index=False)
+        perfis.to_csv(pasta / "atus_perfis.csv", index=False)
         metadados = {
             "versao_silver": versao,
+            "versao_analise": VERSAO_ANALISE,
             "versao_catalogo": execucao[0],
             "versao_transformacoes": execucao[1],
             "fontes": fontes.to_dict(orient="records"),
             "linhas_silver": {t: len(q) for t, q in quadros.items()},
+            "recortes_perfil": "filtro_estuda/filtro_trabalha vazios significam sem filtro; nunca perfil desconhecido convertido em não",
             "finalidade": "Análise exploratória interna, não é snapshot Gold",
             "limitacoes": [
                 "Pesquisas de populações e medidas diferentes; não combinar fontes.",
@@ -242,6 +308,7 @@ def executar_analise(caminho: Path, saida: Path):
                 "",
                 "Resultados para conferência interna, anteriores à publicação Gold. Os CSVs incluem suporte e valores não publicáveis.",
                 "Sem comparação de duração com missões pessoais, intervalos de confiança ou interpretação causal.",
+                "Cruzamentos por estudo/trabalho em atus_perfis.csv; motivos de suporte nos dois CSVs ATUS. Os recortes não autorizam personalização sem compatibilidade com o onboarding.",
                 "",
             ]
         )
@@ -251,7 +318,9 @@ def executar_analise(caminho: Path, saida: Path):
             arquivo.replace(destino / arquivo.name)
     return {
         "versao_silver": versao,
+        "versao_analise": VERSAO_ANALISE,
         "diretorio": str(destino),
         "resultados_vigitel": len(vigitel),
         "resultados_atus": len(atus),
+        "resultados_atus_perfis": len(perfis),
     }

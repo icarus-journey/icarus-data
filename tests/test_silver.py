@@ -396,3 +396,40 @@ def test_cli_silver_nao_exige_credenciais_minio(banco, tmp_path, monkeypatch, ca
     )
     assert principal() == 0
     assert '"resultados_vigitel"' in capsys.readouterr().out
+
+
+def test_analise_perfis_nao_classifica_matricula_desconhecida_como_nao(banco, tmp_path):
+    executar_silver(banco)
+    resultado = executar_analise(banco, tmp_path / "analise")
+    perfis = pd.read_csv(Path(resultado["diretorio"]) / "atus_perfis.csv")
+    com_estudo = perfis[perfis.filtro_estuda.notna()]
+    assert not com_estudo.faixa_etaria.isin(["18+", "50–64", "65+"]).any()
+    assert perfis[perfis.filtro_estuda.eq(False)].empty
+    # Trabalho conhecido permanece utilizável mesmo quando matrícula é desconhecida.
+    assert not perfis[
+        (perfis.faixa_etaria == "50–64")
+        & perfis.filtro_trabalha.eq(False)
+        & perfis.filtro_estuda.isna()
+    ].empty
+    adultos_sem_trabalho = perfis[
+        (perfis.faixa_etaria == "18+")
+        & perfis.filtro_trabalha.eq(False)
+        & perfis.filtro_estuda.isna()
+    ]
+    assert not adultos_sem_trabalho.empty
+    participacao = adultos_sem_trabalho[
+        adultos_sem_trabalho.medida.eq("participacao_no_dia")
+    ]
+    assert participacao.n.eq(1).all()
+    assert participacao.motivos_suporte.str.contains("denominador_menor_100").all()
+
+
+def test_periodos_compartilham_motivo_de_suporte_e_recorte(banco, tmp_path):
+    executar_silver(banco)
+    resultado = executar_analise(banco, tmp_path / "analise")
+    analise = pd.read_csv(Path(resultado["diretorio"]) / "atus.csv")
+    periodos = analise[analise.medida.eq("distribuicao_periodo")]
+    for _, grupo in periodos.groupby(["faixa_etaria", "tipo_dia", "indicador"]):
+        assert len(grupo) == 4
+        assert grupo.suporte_elegivel.nunique() == 1
+        assert grupo.motivos_suporte.nunique() == 1

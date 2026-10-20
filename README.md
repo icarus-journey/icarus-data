@@ -100,10 +100,17 @@ validar e gravar todas as tabelas em uma transação; falhas mantêm a Silver
 anterior e não alteram raw ou Bronze. Repetir os mesmos insumos não duplica
 linhas. Um bloqueio compartilhado com a Bronze impede escritores simultâneos.
 
-A análise gera `vigitel.csv`, `atus.csv`, `metadados.json` e `resumo.md` em
+A análise v1.1.0 gera `vigitel.csv`, `atus.csv`, `atus_perfis.csv`,
+`metadados.json` e `resumo.md` em
 `{saida}/{versao_silver}/`. Usa somente a versão vigente, com faixas etárias,
 participação, quantis entre participantes, parcelas de minutos por período e
-tipo de dia ATUS. Os resultados incluem contagens e casos sem suporte para
+tipo de dia ATUS. `atus_perfis.csv` acrescenta filtros por matrícula e ocupação,
+isolados e combinados, somente com respostas conhecidas. Filtro vazio significa
+sem filtro, nunca pessoa classificada como desconhecida ou como “não”. Cortes
+por matrícula não geram o pai `18+` nem idades fora de 15–49 anos. Os arquivos
+registram `motivos_suporte` para explicar a inelegibilidade de cada medida;
+as quatro parcelas de horário compartilham o resultado de suporte do conjunto.
+Os resultados incluem contagens e casos sem suporte para
 conferência **interna**; não são um snapshot publicável. Gold deve aplicar
 supressão complementar, seleção de referência e o contrato de publicação.
 Não há inferência causal, intervalo de confiança ou comparação de horas com
