@@ -4,7 +4,7 @@ from .transformacoes_silver import AREAS
 
 
 VERSAO_GOLD = "2.0.0"
-VERSAO_POLITICA = "2.0.0"
+VERSAO_POLITICA = "2.1.0"
 
 INDICADORES = {
     "vigitel_atividade_fisica_lazer": (
@@ -107,6 +107,23 @@ INDICADORES = {
 
 # Curadoria de fontes primárias: sínteses próprias, sem microdados ou texto integral.
 EVIDENCIAS = [
+    {
+        "id": "estudo_recuperacao_conteudo_2011",
+        "tipo": "evidencia_pesquisa",
+        "area_da_vida": "ESTUDOS_E_APRENDIZADO",
+        "ano": 2011,
+        "doi": "10.1126/science.1199327",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/21252317/",
+        "titulo": "Recuperação do conteúdo e aprendizagem",
+        "populacao": "Universitários em tarefas experimentais de aprendizagem de textos científicos",
+        "desenho": "Experimentos comparando prática de recuperação e estudo com mapas conceituais.",
+        "intervencao": "Recuperar e reconstruir o conteúdo estudado sem consultar o texto.",
+        "desfecho": "Aprendizagem conceitual avaliada por questões de compreensão e inferência.",
+        "achado": "A prática de recuperação favoreceu os resultados nas avaliações realizadas em comparação com estudo com mapas conceituais.",
+        "reflexao": "Depois de estudar, tente explicar uma ideia sem consultar o material. Em seguida, confira o que faltou.",
+        "limites": "Evidência educativa em tarefas experimentais; não mede a aprendizagem, dedicação ou chance de concluir a meta deste usuário; não estabelece uma duração ideal de estudo.",
+        "usos_permitidos": ["contexto_educativo"],
+    },
     {
         "id": "sono_restricao_desempenho_2003",
         "tipo": "evidencia_pesquisa",

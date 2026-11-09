@@ -17,8 +17,8 @@ metadados técnicos por linha e tabelas de controle das execuções.
 A Silver aplica o catálogo 2.0.0: acrescenta sono desejado e pares válidos no
 Vigitel, separa aulas/tarefas e inclui demandas domésticas e deslocamentos por
 finalidade no ATUS. A Gold calcula referências, duas associações descritivas
-de atividade física/sono e fatos rastreáveis; preserva duas sínteses educativas
-de pesquisas primárias. A publicação atômica usa o esquema PostgreSQL
+de atividade física/sono e fatos rastreáveis; preserva três sínteses educativas
+de pesquisas primárias (sono e recuperação de conteúdo em estudos). A publicação atômica usa o esquema PostgreSQL
 `dados_publicos`, separado dos registros pessoais.
 
 ## Requisitos
